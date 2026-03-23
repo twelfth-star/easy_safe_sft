@@ -1,0 +1,19 @@
+name: ethos_binary_reasoning
+task_type: binary_classification
+input_field: text
+label_map:
+  "0": "No"
+  "1": "Yes"
+positive_label: "Yes"
+answer_prefix: "FINAL ANSWER:"
+reasoning_instruction: |
+  Determine whether the following sentence is hate speech.
+  First think briefly about the content, then give the final answer.
+  Your response format must be exactly:
+
+  REASONING:
+  ...
+
+  FINAL ANSWER: ...
+
+  Sentence: {text}

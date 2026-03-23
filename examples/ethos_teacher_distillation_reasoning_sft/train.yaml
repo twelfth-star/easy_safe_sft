@@ -1,0 +1,40 @@
+### model
+model_name_or_path: Qwen/Qwen3-4B-Instruct-2507
+trust_remote_code: true
+
+### method
+stage: sft
+do_train: true
+finetuning_type: lora
+lora_rank: 64
+lora_target: all
+
+### dataset
+dataset_dir: /workspace/easy_safe_sft/data/lf_ready/ethos_teacher_distillation_reasoning_sft
+dataset: train
+template: qwen3_nothink
+cutoff_len: 2048
+preprocessing_num_workers: 16
+dataloader_num_workers: 4
+overwrite_cache: true
+
+### output
+output_dir: /workspace/easy_safe_sft/outputs/ethos_teacher_distillation_reasoning_sft/model
+logging_steps: 1
+save_strategy: steps
+save_steps: 36
+plot_loss: true
+overwrite_output_dir: true
+save_only_model: false
+report_to: wandb
+run_name: ethos_teacher_distillation_reasoning_sft
+
+### train
+per_device_train_batch_size: 2
+gradient_accumulation_steps: 2
+learning_rate: 1.0e-4
+num_train_epochs: 2.0
+lr_scheduler_type: cosine
+warmup_ratio: 0.1
+bf16: true
+ddp_timeout: 180000000

@@ -1,0 +1,25 @@
+### model
+model_name_or_path: Qwen/Qwen3-4B-Instruct-2507
+trust_remote_code: true
+
+### method
+stage: sft
+finetuning_type: lora
+lora_rank: 64
+
+### dataset
+dataset_dir: /home/zhongmouhe/p2/easy_safe_sft/data/lf_ready/ethos_teacher_distillation_reasoning_sft
+eval_dataset: valid,test
+template: qwen3_nothink
+cutoff_len: 2048
+
+### output
+output_dir: /home/zhongmouhe/p2/easy_safe_sft/outputs/ethos_teacher_distillation_reasoning_sft/model
+easy_safe_sft_eval_concurrency: 32
+easy_safe_sft_vllm_tp_size: -1
+easy_safe_sft_vllm_gpu_util: 0.9
+easy_safe_sft_vllm_maxlen: 32768
+
+### generate
+do_sample: false
+max_new_tokens: 256
