@@ -54,7 +54,12 @@ docker stop llamafactory
 Evaluation should run outside Docker in a different environment:
 
 ```bash
-source /path/to/your/vllm/env/bin/activate
+pip install uv
+uv venv /path/to/vllm --python 3.11
+source /path/to/vllm/bin/activate
+uv self update
+uv pip install vllm --torch-backend=cu128  # change cu128 to your CUDA version
+uv pip install transformers PyYAML loguru tqdm accelerate
 ```
 
 This environment is only for inference and scoring.
