@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from easy_safe_sft.utils import load_json, load_yaml, prepend_pythonpath, run_command, write_yaml
+from easy_safe_sft.utils import load_json, load_yaml, prepend_pythonpath, resolve_yaml_paths, run_command, write_yaml
 
 
 LOCAL_CONFIG_KEYS = {
@@ -87,9 +87,8 @@ def _make_train_config(base_config: dict[str, Any]) -> dict[str, Any]:
 
 def _run_llamafactory_train(llamafactory_root: str, config_path: str) -> None:
     src_dir = Path(llamafactory_root) / "src"
-    cli_path = src_dir / "llamafactory" / "cli.py"
     env = prepend_pythonpath(os.environ, str(src_dir))
-    run_command([sys.executable, str(cli_path), "train", str(config_path)], cwd=llamafactory_root, env=env)
+    run_command([sys.executable, "-m", "llamafactory.cli", "train", str(config_path)], cwd=llamafactory_root, env=env)
 
 
 def main() -> None:
@@ -99,7 +98,7 @@ def main() -> None:
     args = parser.parse_args()
 
     _setup_logger()
-    train_args = load_yaml(args.config_path)
+    train_args = resolve_yaml_paths(load_yaml(args.config_path), args.config_path)
 
     total_steps = _compute_total_steps(train_args)
     logger.info("train 开始: total_steps={}", total_steps)

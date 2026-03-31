@@ -8,13 +8,13 @@ finetuning_type: lora
 lora_rank: 64
 
 ### dataset
-dataset_dir: /home/zhongmouhe/p2/easy_safe_sft/data/lf_ready/ethos_sft
+dataset_dir: ../../data/lf_ready/ethos_sft
 eval_dataset: valid,test
 template: qwen3_nothink
 cutoff_len: 2048
 
 ### output
-output_dir: /home/zhongmouhe/p2/easy_safe_sft/outputs/ethos_sft/model
+output_dir: ../../outputs/ethos_sft/model
 easy_safe_sft_eval_concurrency: 32
 easy_safe_sft_vllm_tp_size: -1
 easy_safe_sft_vllm_gpu_util: 0.9

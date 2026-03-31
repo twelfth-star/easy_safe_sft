@@ -46,6 +46,20 @@ def write_jsonl(path: str | Path, rows: Iterable[dict[str, Any]]) -> None:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+_PATH_KEYS = {"dataset_dir", "output_dir"}
+
+
+def resolve_yaml_paths(config: dict[str, Any], config_path: str | Path) -> dict[str, Any]:
+    """Resolve relative paths in *config* against the directory of *config_path*."""
+    config_dir = Path(config_path).resolve().parent
+    for key in _PATH_KEYS:
+        if key in config:
+            p = Path(config[key])
+            if not p.is_absolute():
+                config[key] = str((config_dir / p).resolve())
+    return config
+
+
 def write_yaml(path: str | Path, data: dict[str, Any]) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

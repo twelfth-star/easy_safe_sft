@@ -34,7 +34,7 @@ def _render_qwen3_nothink_prompt(messages: list[dict[str, str]]) -> str:
 
 
 def _render_prompt(messages: list[dict[str, str]], template: str, tokenizer: Any) -> str:
-    if template == "qwen3_nothink":
+    if template in ("qwen3_nothink", "qwen3_5_nothink", "qwen3_5"):
         return _render_qwen3_nothink_prompt(messages)
 
     if hasattr(tokenizer, "apply_chat_template"):
@@ -96,7 +96,7 @@ class VllmPredictor:
         self._sampling_params = SamplingParams(
             temperature=float(base_config.get("temperature", 1.0)) if bool(base_config.get("do_sample", False)) else 0.0,
             top_p=float(base_config.get("top_p", 1.0)),
-            top_k=int(base_config.get("top_k", 0)),
+            top_k=int(base_config.get("top_k", -1)),
             repetition_penalty=float(base_config.get("repetition_penalty", 1.0)),
             max_tokens=int(base_config.get("max_new_tokens", 16)),
             stop_token_ids=[self._tokenizer.convert_tokens_to_ids("<|im_end|>")],

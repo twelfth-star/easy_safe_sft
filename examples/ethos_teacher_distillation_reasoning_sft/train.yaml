@@ -10,7 +10,7 @@ lora_rank: 64
 lora_target: all
 
 ### dataset
-dataset_dir: /workspace/easy_safe_sft/data/lf_ready/ethos_teacher_distillation_reasoning_sft
+dataset_dir: ../../data/lf_ready/ethos_teacher_distillation_reasoning_sft
 dataset: train
 template: qwen3_nothink
 cutoff_len: 2048
@@ -19,7 +19,7 @@ dataloader_num_workers: 4
 overwrite_cache: true
 
 ### output
-output_dir: /workspace/easy_safe_sft/outputs/ethos_teacher_distillation_reasoning_sft/model
+output_dir: ../../outputs/ethos_teacher_distillation_reasoning_sft/model
 logging_steps: 1
 save_strategy: steps
 save_steps: 36

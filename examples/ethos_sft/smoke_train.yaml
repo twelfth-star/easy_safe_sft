@@ -1,3 +1,4 @@
+### Smoke test: 只跑 2 步，验证训练流程能跑通
 ### model
 model_name_or_path: Qwen/Qwen3-4B-Instruct-2507
 trust_remote_code: true
@@ -6,35 +7,31 @@ trust_remote_code: true
 stage: sft
 do_train: true
 finetuning_type: lora
-lora_rank: 64
+lora_rank: 16
 lora_target: all
 
 ### dataset
 dataset_dir: ../../data/lf_ready/ethos_sft
 dataset: train
+eval_dataset: valid
 template: qwen3_nothink
-cutoff_len: 2048
-preprocessing_num_workers: 16
-dataloader_num_workers: 4
+cutoff_len: 512
+preprocessing_num_workers: 4
 overwrite_cache: true
 
 ### output
-output_dir: ../../outputs/ethos_sft/model
+output_dir: ../../outputs/smoke_test/model
 logging_steps: 1
 save_strategy: steps
-save_steps: 36
-plot_loss: true
+save_steps: 2
 overwrite_output_dir: true
 save_only_model: false
-report_to: wandb
-run_name: ethos_sft
+report_to: none
 
-### train
+### train — 极小配置，只跑 2 步
+max_steps: 2
 per_device_train_batch_size: 2
-gradient_accumulation_steps: 2
+gradient_accumulation_steps: 1
 learning_rate: 1.0e-4
-num_train_epochs: 2.0
-lr_scheduler_type: cosine
-warmup_ratio: 0.1
 bf16: true
 ddp_timeout: 180000000

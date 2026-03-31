@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 import math
+import multiprocessing
 import os
 import re
 import sys
@@ -16,8 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from easy_safe_sft.score_predictions import evaluate_predictions
-from easy_safe_sft.utils import load_json, load_yaml
-from easy_safe_sft.vllm_predict import VllmPredictor
+from easy_safe_sft.utils import load_json, load_yaml, resolve_yaml_paths
 
 
 def _setup_logger() -> None:
@@ -121,6 +122,44 @@ def _eval_output_dir(train_output_dir: str, target_name: str, dataset_name: str)
     return PROJECT_ROOT / "temp" / "eval" / experiment_name / target_name / dataset_name
 
 
+def _predict_in_subprocess(
+    train_args: dict[str, Any],
+    adapter_path: str | None,
+    eval_concurrency: int,
+    tp_size: int | None,
+    gpu_util: float,
+    maxlen: int,
+    predict_tasks: list[dict[str, str]],
+    target_name: str,
+) -> None:
+    """Run vLLM prediction in an isolated process.
+
+    When this function returns (or crashes), the OS reclaims all GPU memory,
+    NCCL communicators, and TCP ports — so the next checkpoint can start
+    cleanly.
+    """
+    _setup_logger()
+    from easy_safe_sft.vllm_predict import VllmPredictor
+
+    predictor = VllmPredictor(
+        base_config=train_args,
+        adapter_path=adapter_path,
+        concurrency=eval_concurrency,
+        tp_size=tp_size,
+        gpu_util=gpu_util,
+        maxlen=maxlen,
+    )
+    try:
+        for task in predict_tasks:
+            predictor.predict_dataset(
+                dataset_path=task["dataset_path"],
+                output_path=task["prediction_path"],
+                progress_desc=f"{target_name}:{task['dataset_name']}",
+            )
+    finally:
+        predictor.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="用纯 vLLM 对训练输出目录里的 checkpoint 和 final 模型统一评测")
     parser.add_argument("--config-path", required=True)
@@ -135,7 +174,7 @@ def main() -> None:
     args = parser.parse_args()
 
     _setup_logger()
-    train_args = load_yaml(args.config_path)
+    train_args = resolve_yaml_paths(load_yaml(args.config_path), args.config_path)
     task_config = load_yaml(args.task_config)
 
     eval_datasets = [name.strip() for name in str(train_args.get("eval_dataset", "")).split(",") if name.strip()]
@@ -176,51 +215,64 @@ def main() -> None:
 
     for target_name, adapter_path, step in eval_targets:
         logger.info("=== 开始测试模型: {} (step={}, adapter_path={}) ===", target_name, step, adapter_path)
-        predictor = VllmPredictor(
-            base_config=train_args,
-            adapter_path=adapter_path,
-            concurrency=eval_concurrency,
-            tp_size=vllm_tp_size,
-            gpu_util=vllm_gpu_util,
-            maxlen=vllm_maxlen,
+
+        # Prepare prediction output paths for each dataset.
+        predict_tasks: list[dict[str, str]] = []
+        for dataset_name in eval_datasets:
+            result_dir = _eval_output_dir(train_args["output_dir"], target_name, dataset_name)
+            result_dir.mkdir(parents=True, exist_ok=True)
+            dataset_file = dataset_info[dataset_name].get("file_name", f"{dataset_name}.jsonl")
+            predict_tasks.append({
+                "dataset_name": dataset_name,
+                "dataset_path": str(dataset_dir / dataset_file),
+                "prediction_path": str(result_dir / "generated_predictions.jsonl"),
+                "summary_path": str(result_dir / "summary.json"),
+                "details_path": str(result_dir / "details.jsonl"),
+                "meta_path": str(dataset_dir / f"{dataset_name}_meta.jsonl"),
+            })
+
+        # Run vLLM prediction in a separate process so NCCL state is fully
+        # cleaned up when the process exits.  This avoids the NCCL timeout
+        # that occurs when creating a second engine in the same process.
+        proc = multiprocessing.Process(
+            target=_predict_in_subprocess,
+            kwargs={
+                "train_args": train_args,
+                "adapter_path": adapter_path,
+                "eval_concurrency": eval_concurrency,
+                "tp_size": vllm_tp_size,
+                "gpu_util": vllm_gpu_util,
+                "maxlen": vllm_maxlen,
+                "predict_tasks": predict_tasks,
+                "target_name": target_name,
+            },
         )
+        proc.start()
+        proc.join()
+        if proc.exitcode != 0:
+            raise RuntimeError(f"vLLM 子进程退出异常 (exit code {proc.exitcode})，target={target_name}")
 
-        try:
-            for dataset_name in eval_datasets:
-                logger.info("=== 预测+评测: target={}, step={}, dataset={} ===", target_name, step, dataset_name)
-                result_dir = _eval_output_dir(train_args["output_dir"], target_name, dataset_name)
-                result_dir.mkdir(parents=True, exist_ok=True)
+        # Scoring runs in the main process (no GPU needed).
+        for task in predict_tasks:
+            dataset_name = task["dataset_name"]
+            logger.info("=== 评分: target={}, step={}, dataset={} ===", target_name, step, dataset_name)
 
-                dataset_file = dataset_info[dataset_name].get("file_name", f"{dataset_name}.jsonl")
-                prediction_path = result_dir / "generated_predictions.jsonl"
-                summary_path = result_dir / "summary.json"
-                details_path = result_dir / "details.jsonl"
-                meta_path = dataset_dir / f"{dataset_name}_meta.jsonl"
+            evaluate_predictions(
+                task_config=task_config,
+                student_template=str(train_args["template"]),
+                prediction_path=task["prediction_path"],
+                meta_path=task["meta_path"],
+                summary_output_path=task["summary_path"],
+                details_output_path=task["details_path"],
+                prediction_style=args.prediction_style,
+                has_reasoning=args.has_reasoning,
+            )
 
-                predictor.predict_dataset(
-                    dataset_path=str(dataset_dir / dataset_file),
-                    output_path=str(prediction_path),
-                    progress_desc=f"{target_name}:{dataset_name}",
-                )
+            summary = load_json(task["summary_path"])
+            logger.info("评测结果: target={}, step={}, dataset={}, {}", target_name, step, dataset_name, summary)
 
-                evaluate_predictions(
-                    task_config=task_config,
-                    student_template=str(train_args["template"]),
-                    prediction_path=str(prediction_path),
-                    meta_path=str(meta_path),
-                    summary_output_path=str(summary_path),
-                    details_output_path=str(details_path),
-                    prediction_style=args.prediction_style,
-                    has_reasoning=args.has_reasoning,
-                )
-
-                summary = load_json(summary_path)
-                logger.info("评测结果: target={}, step={}, dataset={}, {}", target_name, step, dataset_name, summary)
-
-                if use_tensorboard:
-                    _log_to_tensorboard(result_dir, summary, step, dataset_name)
-        finally:
-            predictor.close()
+            if use_tensorboard:
+                _log_to_tensorboard(Path(task["summary_path"]).parent, summary, step, dataset_name)
 
     logger.info("evaluate_checkpoints 完成")
 
