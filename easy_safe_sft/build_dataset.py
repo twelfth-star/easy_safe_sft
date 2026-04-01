@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
+"""Convert raw data or teacher traces to LlamaFactory training format."""
 
 import argparse
 import sys
 from pathlib import Path
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -11,8 +11,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="把原始样本或 teacher trace 转成 LlamaFactory 数据")
-    parser.add_argument("--task-config", required=True)
+    parser = argparse.ArgumentParser(description="Convert raw/trace data to LlamaFactory format")
+    parser.add_argument("--prompt-config", required=True, help="Unified prompt+task YAML")
     parser.add_argument("--train-input", required=True)
     parser.add_argument("--train-source", choices=["raw", "trace"], required=True)
     parser.add_argument("--output-dir", required=True)
@@ -25,10 +25,12 @@ def main() -> None:
     args = parser.parse_args()
 
     from easy_safe_sft.dataset_builder import build_dataset
-    from easy_safe_sft.utils import load_yaml
+    from easy_safe_sft.prompt_config import load_prompt_config
+
+    prompt_cfg = load_prompt_config(args.prompt_config)
 
     build_dataset(
-        task_config=load_yaml(args.task_config),
+        prompt_cfg=prompt_cfg,
         train_input_path=args.train_input,
         train_source=args.train_source,
         output_dir=args.output_dir,

@@ -1,0 +1,15 @@
+# Teacher config aligned with Tinker's contractNLI settings
+model: claude-haiku-4-5
+temperature: 0.0
+max_tokens: 3072
+output_format: reasoning_label
+
+# Rejection sampling (Tinker uses k=4, workers=10)
+k: 4
+workers: 10
+max_retries: 3
+retry_temperature: 1.0
+min_reasoning_chars: 20
+request_timeout: 90
+checkpoint_interval: 100
+use_rulebook: false

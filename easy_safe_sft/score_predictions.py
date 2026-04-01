@@ -16,6 +16,17 @@ from easy_safe_sft.tasks import extract_final_answer, normalize_answer, pick_out
 from easy_safe_sft.utils import read_jsonl, write_json, write_jsonl
 
 
+def _safe_div(a: float, b: float) -> float:
+    return a / b if b else 0.0
+
+
+def macro_f1_from_confusion(tp: int, tn: int, fp: int, fn: int) -> float:
+    """Compute macro F1 from confusion matrix (average of positive and negative F1)."""
+    f1_pos = _safe_div(2.0 * tp, 2 * tp + fp + fn)
+    f1_neg = _safe_div(2.0 * tn, 2 * tn + fp + fn)
+    return (f1_pos + f1_neg) / 2.0
+
+
 def _binary_metrics(task_config: dict[str, Any], predictions: list[str], golds: list[str]) -> dict[str, float]:
     positive_label = task_config["positive_label"]
     tp = fp = fn = tn = 0
@@ -30,13 +41,23 @@ def _binary_metrics(task_config: dict[str, Any], predictions: list[str], golds: 
         else:
             tn += 1
 
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    precision = _safe_div(tp, tp + fp)
+    recall = _safe_div(tp, tp + fn)
+    f1 = _safe_div(2 * precision * recall, precision + recall)
+    recall_neg = _safe_div(tn, tn + fp)
+    balanced_accuracy = (recall + recall_neg) / 2.0
+
+    # Matthews Correlation Coefficient
+    denom_sq = (tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)
+    mcc = _safe_div(tp * tn - fp * fn, denom_sq ** 0.5) if denom_sq > 0 else 0.0
+
     return {
         "precision": precision,
         "recall": recall,
         "f1": f1,
+        "macro_f1": macro_f1_from_confusion(tp, tn, fp, fn),
+        "balanced_accuracy": balanced_accuracy,
+        "mcc": mcc,
         "tp": tp,
         "fp": fp,
         "fn": fn,
@@ -64,6 +85,7 @@ def evaluate_predictions(
 
     total = 0
     correct = 0
+    invalid_count = 0
     normalized_predictions: list[str] = []
     normalized_golds: list[str] = []
     detail_rows: list[dict[str, object]] = []
@@ -79,6 +101,7 @@ def evaluate_predictions(
         except Exception as error:
             logger.warning("预测解析失败，计为错误: id={}, error={}", meta_row["id"], error)
             normalized_prediction = ""
+            invalid_count += 1
         row_correct = normalized_prediction == normalized_gold
         if row_correct:
             correct += 1
@@ -102,6 +125,8 @@ def evaluate_predictions(
         "prediction_style": style,
         "num_examples": total,
         "accuracy": correct / total if total else 0.0,
+        "invalid_count": invalid_count,
+        "invalid_rate": invalid_count / total if total else 0.0,
     }
     if task_config["task_type"] == "binary_classification":
         summary.update(_binary_metrics(task_config, normalized_predictions, normalized_golds))
@@ -113,8 +138,8 @@ def evaluate_predictions(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="解析模型输出并计算任务指标")
-    parser.add_argument("--task-config", required=True)
+    parser = argparse.ArgumentParser(description="Score model predictions against gold answers")
+    parser.add_argument("--prompt-config", required=True, help="Unified prompt+task YAML")
     parser.add_argument("--student-template", required=True)
     parser.add_argument("--predictions", required=True)
     parser.add_argument("--meta", required=True)
@@ -124,10 +149,10 @@ def main() -> None:
     parser.add_argument("--has-reasoning", action="store_true")
     args = parser.parse_args()
 
-    from easy_safe_sft.utils import load_yaml
+    from easy_safe_sft.prompt_config import load_prompt_config
 
     evaluate_predictions(
-        task_config=load_yaml(args.task_config),
+        task_config=load_prompt_config(args.prompt_config).as_task_config,
         student_template=args.student_template,
         prediction_path=args.predictions,
         meta_path=args.meta,

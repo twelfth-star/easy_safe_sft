@@ -2,16 +2,17 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROJECT_DIR="$(cd "${ROOT_DIR}/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
-TASK_CONFIG="${ROOT_DIR}/examples/ethos_sft/task.yaml"
+PROMPT_CONFIG="${PROJECT_DIR}/prompts/ethos/sft_reasoning.yaml"
 TRAIN_RAW="${ROOT_DIR}/data/raw/ethos/ethos_train.jsonl"
 VALID_RAW="${ROOT_DIR}/data/raw/ethos/ethos_val.jsonl"
 TEST_RAW="${ROOT_DIR}/data/raw/ethos/ethos_test.jsonl"
 LF_DATA_DIR="${ROOT_DIR}/data/lf_ready/ethos_sft"
 
 "${PYTHON_BIN}" "${ROOT_DIR}/easy_safe_sft/build_dataset.py" \
-  --task-config "${TASK_CONFIG}" \
+  --prompt-config "${PROMPT_CONFIG}" \
   --train-input "${TRAIN_RAW}" \
   --train-source raw \
   --valid-input "${VALID_RAW}" \

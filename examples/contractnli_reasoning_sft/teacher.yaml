@@ -1,0 +1,15 @@
+# Teacher config for smoke test: Claude Sonnet 4.6, minimal cost
+model: claude-sonnet-4-6
+temperature: 0.0
+max_tokens: 2048
+output_format: reasoning_label
+
+# Rejection sampling
+k: 2
+workers: 2
+max_retries: 2
+retry_temperature: 0.7
+min_reasoning_chars: 10
+request_timeout: 90
+checkpoint_interval: 5
+use_rulebook: true

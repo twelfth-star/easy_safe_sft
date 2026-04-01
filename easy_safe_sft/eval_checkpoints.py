@@ -163,7 +163,7 @@ def _predict_in_subprocess(
 def main() -> None:
     parser = argparse.ArgumentParser(description="用纯 vLLM 对训练输出目录里的 checkpoint 和 final 模型统一评测")
     parser.add_argument("--config-path", required=True)
-    parser.add_argument("--task-config", required=True)
+    parser.add_argument("--prompt-config", required=True, help="Unified prompt+task YAML")
     parser.add_argument("--prediction-style", default="auto")
     parser.add_argument("--has-reasoning", action="store_true")
     parser.add_argument("--eval-concurrency", type=int)
@@ -175,7 +175,9 @@ def main() -> None:
 
     _setup_logger()
     train_args = resolve_yaml_paths(load_yaml(args.config_path), args.config_path)
-    task_config = load_yaml(args.task_config)
+
+    from easy_safe_sft.prompt_config import load_prompt_config
+    task_config = load_prompt_config(args.prompt_config).as_task_config
 
     eval_datasets = [name.strip() for name in str(train_args.get("eval_dataset", "")).split(",") if name.strip()]
     if not eval_datasets:

@@ -67,6 +67,14 @@ def write_yaml(path: str | Path, data: dict[str, Any]) -> None:
         yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
 
 
+def setup_file_logging(log_dir: str | Path) -> None:
+    """Add a loguru file sink to log_dir/run.log (in addition to stderr)."""
+    log_path = Path(log_dir) / "run.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logger.add(str(log_path), level=os.getenv("EASY_SAFE_SFT_LOG_LEVEL", "INFO"))
+    logger.info("File logging enabled: {}", log_path)
+
+
 def run_command(cmd: list[str], cwd: str | Path | None = None, env: dict[str, str] | None = None) -> None:
     logger.info("运行命令: {}", " ".join(cmd))
     subprocess.run(cmd, cwd=cwd, env=env, check=True)

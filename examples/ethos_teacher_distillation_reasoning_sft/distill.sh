@@ -2,30 +2,34 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PROJECT_DIR="$(cd "${ROOT_DIR}/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
-TASK_CONFIG="${ROOT_DIR}/examples/ethos_teacher_distillation_reasoning_sft/task.yaml"
+# Use sft_reasoning_nothink.yaml for non-thinking mode, sft_reasoning.yaml for thinking mode
+PROMPT_CONFIG="${PROJECT_DIR}/prompts/ethos/sft_reasoning_nothink.yaml"
 TEACHER_CONFIG="${ROOT_DIR}/examples/ethos_teacher_distillation_reasoning_sft/teacher.yaml"
+RULES_DIR="${PROJECT_DIR}/rules/ethos"
+DATASET_ROOT="${PROJECT_DIR}/datasets"
 
-TRAIN_RAW="${ROOT_DIR}/data/raw/ethos/ethos_train.jsonl"
-VALID_RAW="${ROOT_DIR}/data/raw/ethos/ethos_val.jsonl"
-TEST_RAW="${ROOT_DIR}/data/raw/ethos/ethos_test.jsonl"
-
-TRACE_OUTPUT="${ROOT_DIR}/data/distilled/ethos_teacher_distillation_reasoning_sft/train_trace.jsonl"
+TRACE_OUTPUT_DIR="${ROOT_DIR}/data/distilled/ethos_teacher_distillation_reasoning_sft"
 LF_DATA_DIR="${ROOT_DIR}/data/lf_ready/ethos_teacher_distillation_reasoning_sft"
 
+# Step 1: Teacher distillation
 "${PYTHON_BIN}" "${ROOT_DIR}/easy_safe_sft/distill.py" \
-  --task-config "${TASK_CONFIG}" \
+  --prompt-config "${PROMPT_CONFIG}" \
   --teacher-config "${TEACHER_CONFIG}" \
-  --input "${TRAIN_RAW}" \
-  --output "${TRACE_OUTPUT}"
+  --dataset-root "${DATASET_ROOT}" \
+  --dataset-name ethos \
+  --dataset-version v1 \
+  --split-policy policy_v1 \
+  --rules-dir "${RULES_DIR}" \
+  --output-dir "${TRACE_OUTPUT_DIR}"
 
+# Step 2: Build LlamaFactory dataset from accepted traces
 "${PYTHON_BIN}" "${ROOT_DIR}/easy_safe_sft/build_dataset.py" \
-  --task-config "${TASK_CONFIG}" \
-  --train-input "${TRACE_OUTPUT}" \
+  --prompt-config "${PROMPT_CONFIG}" \
+  --train-input "${TRACE_OUTPUT_DIR}/accepted_samples.jsonl" \
   --train-source trace \
-  --valid-input "${VALID_RAW}" \
-  --test-input "${TEST_RAW}" \
   --output-dir "${LF_DATA_DIR}" \
   --student-template qwen3_nothink \
-  --distill-output-style reasoning_text
+  --distill-output-style reasoning_label
